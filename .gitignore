@@ -1,0 +1,4 @@
+brisketenv/*
+.env
+SkillCV/
+*.db
