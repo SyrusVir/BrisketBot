@@ -2,3 +2,5 @@ brisketenv/*
 .env
 SkillCV/
 *.db
+*.pyc
+*.drawio
