@@ -4,3 +4,6 @@ SkillCV/
 *.db
 *.pyc
 *.drawio
+Pipfile.lock
+.gitignore
+*.code-workspace
