@@ -1,9 +1,7 @@
 import datetime
 import sqlite3 as sql
 from sqlite_utils import Database
-from sqlite_utils.db import Table
-from MemberTable import MemberTable
-from WeaponTable import NWWeapons
+# from MemberTable import MemberTable
 
 class CharacTable():
     TABLE_NAME = "characterlevellog"
@@ -21,8 +19,7 @@ class CharacTable():
                 CharacTable.MEMBERID_COL : int,
                 CharacTable.LEVEL_COL : int
             },
-            pk=CharacTable.LOGID_COL,
-            foreign_keys=[(CharacTable.MEMBERID_COL, MemberTable.TABLE_NAME)])
+            pk=CharacTable.LOGID_COL)
         except sql.OperationalError as err:
             if 'already exists' in str(err):
                 pass

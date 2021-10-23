@@ -4,7 +4,7 @@ Defines the look-up tables containing weapons and weapon categories
 from sqlite_utils import Database
 import sqlite3 as sql
 import datetime
-from MemberTable import MemberTable
+# from MemberTable import MemberTable
 
 class NWWeaponCategs():
     TABLE_NAME = "weaponcategories"
@@ -99,7 +99,6 @@ class WeaponLogTable():
             },
                 pk=WeaponLogTable.UPDATEID_COL,
                 foreign_keys=[
-                    (WeaponLogTable.MEMBERID_COL, MemberTable.TABLE_NAME),
                     (WeaponLogTable.WEAPONID_COL, NWWeapons.TABLE_NAME)
                 ])
         except sql.OperationalError as err:

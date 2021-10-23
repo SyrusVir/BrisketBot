@@ -1,7 +1,7 @@
 import sqlite3 as sql
 from sqlite_utils import Database
 from sqlite_utils.db import NotFoundError
-from MemberTable import MemberTable
+# from MemberTable import MemberTable
 import datetime
 
 class BankTable():
@@ -23,7 +23,7 @@ class BankTable():
                 BankTable.MEMBERID_COL : int,
                 BankTable.AMNT_COL : float,
                 BankTable.NOTE_COL : str
-            }, pk=BankTable.XACTID_COL, foreign_keys=[(BankTable.MEMBERID_COL,MemberTable.TABLE_NAME)])
+            }, pk=BankTable.XACTID_COL)
 
             bank_log_table.insert({
                 BankTable.XACTID_COL: 0,
