@@ -1,5 +1,6 @@
 import sqlite3 as sql
 from sqlite_utils import Database
+from sqlite_utils.db import NotFoundError
 from MemberTable import MemberTable
 import datetime
 
@@ -36,23 +37,35 @@ class BankTable():
             else:
                 raise err
 
-    def upsertBankLog(db:Database, member_id:int, date:datetime.date=None, note:str=None, xact_id=None):
+    def insertBankLog(db:Database, member_id:int, amount:float, date:datetime.date=None,note:str=None):
         if date == None:
             date = datetime.date.today()
         
+        db[BankTable.TABLE_NAME].insert({
+            BankTable.MEMBERID_COL : member_id,
+            BankTable.AMNT_COL : amount,
+            BankTable.DATE_COL : date,
+            BankTable.NOTE_COL : note
+        })
+
+
+    def updateBankLog(db:Database,xact_id:int, amount:float=None, date:datetime.date=None, note:str=None):
         bank_log_table = db[BankTable.TABLE_NAME]
 
-        table_data = {
-            BankTable.MEMBERID_COL : member_id,
-            BankTable.DATE_COL : date,
-        }
-
-        if note != None:
+        table_data = {}
+        if amount != None:
+            table_data[BankTable.AMNT_COL] = amount
+        if date != None:
+            table_data[BankTable.DATE_COL] = date
+        if note != None: 
             table_data[BankTable.NOTE_COL] = note
-        if xact_id !=None:
-            table_data[BankTable.XACTID_COL] = xact_id
 
-        bank_log_table.upsert(table_data)
+        # Execute update if table data is non-empty
+        if table_data:
+            bank_log_table.update(xact_id, table_data)
+
+    def deleteBankLog(db:Database,xact_id:int):
+        db[BankTable.TABLE_NAME].delete(xact_id)
 
 if __name__ == "__main__":
     pass

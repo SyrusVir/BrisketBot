@@ -1,6 +1,7 @@
 import sqlite3 as sql
 from sqlite_utils import Database
 from typing import List
+
 class MemberTable():
     TABLE_NAME = "members"
     MEMBERID_COL = "MemberID"
@@ -21,21 +22,13 @@ class MemberTable():
             else:
                 raise err
 
-    def upsertMembers(db:Database, players:List[str], discord_ids:List[int]):
-        if type(players) == list and type(discord_ids) == list:
-            if len(players) == len(discord_ids):
-                table_data = [{
-                    MemberTable.DISCORDID_COL : did,
-                    MemberTable.NAME_COL : name
-                } for name,did in zip(players,discord_ids)]
-            
-                member_table = db[MemberTable.TABLE_NAME]
-                member_table.upsert_all(table_data,pk=MemberTable.DISCORDID_COL)
-            else:
-                print("Length Mismatch Error")
-        else:
-            print('Type Mismatch Error')
-        pass
+    def upsertMembers(db:Database, member_name:str, discord_ids:int):
+        table_data = {
+            MemberTable.DISCORDID_COL : discord_ids,
+            MemberTable.NAME_COL : member_name
+        }     
+
+        db[MemberTable.TABLE_NAME].upsert(table_data,pk=MemberTable.DISCORDID_COL)
 
     def deleteMember(db:Database,discord_id:int):
         member_table = db[MemberTable.TABLE_NAME]
