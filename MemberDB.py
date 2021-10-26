@@ -1,10 +1,9 @@
 import sqlite3 as sql
 from sqlite_utils import Database
-from typing import List
+from typing import List, Union
 
 class MemberTable():
     TABLE_NAME = "members"
-    MEMBERID_COL = "MemberID"
     DISCORDID_COL = "DiscordID"
     NAME_COL = "Name"
     DISCORD_IDX = "idx_discord_id"
@@ -22,17 +21,21 @@ class MemberTable():
             else:
                 raise err
 
-    def upsertMembers(db:Database, member_name:str, discord_ids:int):
-        table_data = {
-            MemberTable.DISCORDID_COL : discord_ids,
-            MemberTable.NAME_COL : member_name
-        }     
+    def upsertMembers(db:Database, member_name:Union[str,List[str]], discord_ids:Union[int, List[int]]):
+        if type(member_name) == list and type(discord_ids) == list:
+            if len(member_name) != len(discord_ids):
+                raise ValueError("List of members and IDs not of identical lengths")
 
-        db[MemberTable.TABLE_NAME].upsert(table_data,pk=MemberTable.DISCORDID_COL)
+            table_data = [{MemberTable.DISCORDID_COL : id, MemberTable.NAME_COL : name} for id, name in zip(discord_ids, member_name)]     
+        elif type(member_name) == str and type(discord_ids) == int:
+            table_data = [{MemberTable.DISCORDID_COL:discord_ids, MemberTable.NAME_COL:member_name}]
+        else:
+            raise TypeError("Member names and IDs must be either a string and int or a list of strings and a list of ints")
+
+        db[MemberTable.TABLE_NAME].upsert_all(table_data,pk=MemberTable.DISCORDID_COL)
 
     def deleteMember(db:Database,discord_id:int):
-        member_table = db[MemberTable.TABLE_NAME]
-        member_table.delete(discord_id)
+        db[MemberTable.TABLE_NAME].delete(discord_id)
 
 if __name__ == "__main__":
     import sqlite3 as sql
