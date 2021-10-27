@@ -2,7 +2,7 @@ import datetime
 import os
 import re
 from typing import Generator, List
-import discord
+import discord  
 from discord import guild
 from discord import member
 from discord.ext import commands
@@ -25,40 +25,59 @@ from CharacterDB import CharacTable
 from BankDB import BankTable
 
 load_dotenv()
-    TOKEN = os.getenv('DISCORD_TOKEN')
-GUILD_ID = int(os.getenv('DISCORD_GUILD'))
-    CMD_FLAG = '>>'
-    DB_FILE = 'brisket.db'
+TOKEN = os.getenv('DISCORD_TOKEN')
+DEBUG_GUILD_ID = int(os.getenv('DEBUG_GUILD'))
+BRISKET_GUILD_ID = int(os.getenv('BRISKET_GUILD'))
+CMD_FLAG = '>>'
+DB_FILE = 'brisket.db'
 
+## Restrict slash commands to users with Dev role
+allowed_slash_roles = []
+brisket_perms = {BRISKET_GUILD_ID : create_permission(898814200040812585, SlashCommandPermissionType.ROLE, True)}
+
+## Instantiating Bot and slash objects
 intents = discord.Intents.default()
 intents.members = True
 bot = commands.Bot(command_prefix=CMD_FLAG, intents=intents)
 slash = SlashCommand(bot, sync_commands=True)
 
-
 ## Initializing database
-brisket_db = BrisketDB('brisket4.db')
+brisket_db = BrisketDB(DB_FILE)
 
+## Bot Events ###################################################
+@bot.event
+async def on_ready():
+    print("Ready!")  
+    guild = bot.get_guild(DEBUG_GUILD_ID)
+    channel = guild.get_channel(896038294297649184)
+
+@bot.event
+async def on_error(event:str, *args, **kwargs):
+    print("Error Event!")
+    await bot.close()
+###################################################################
+
+## Test Slash Commands ############################################
 @slash.slash(name="ping",
     description="A test slash command",
-    guild_ids=[GUILD_ID],
-    options=[
-        create_option(
-                 name="optone",
-                 description="This is the first option we have.",
-                 option_type=SlashCommandOptionType.USER,
-                 required=False
-        )
-    ])
-async def ping(ctxt: SlashContext, optone):
-    print(optone)
-    print(type(optone))
+    default_permission=False,
+    permissions={DEBUG_GUILD_ID: [create_permission(896037378156802068, SlashCommandPermissionType.USER,True)]},
+)
+async def ping(ctxt: SlashContext):
     await ctxt.send("pong")
+
+@slash.slash(name='closebot',
+    default_permission=False,
+    description="Close bot")
+async def _close_bot(ctxt:SlashContext):
+    await bot.close()
+##########################################################################
 
 ## Bank Slash Commands ###################################################
 @slash.subcommand(base='bank',
     name='add',
     description="Record donation to company bank",
+    base_default_permission=False,
     options=[
         create_option(name="amount",
             description="Donation amount",
@@ -97,6 +116,7 @@ async def _bank_add(ctxt:SlashContext,amount:str,note:str=None,date:str=None):
 @slash.subcommand(base='bank',
     name='delete',
     description="Delete company bank donation",
+    base_default_permission=False,
     options=[
         create_option(name="xactid",
             description="Transaction ID",
@@ -126,6 +146,7 @@ async def _bank_delete(ctxt:SlashContext,xactid:int):
 @slash.subcommand(base='bank',
     name='edit',
     description="Edit an existing record.",
+    base_default_permission=False,
     options= [
         create_option(name="xactid",
             required=True,
@@ -170,6 +191,7 @@ async def _bank_edit(ctxt: SlashContext, xactid:int, amount:str=None, date:str=N
 @slash.subcommand(base='bank',
     name='view',
     description='Show donation logs',
+    base_default_permission=False,
     options= [
         create_option(name='user',
             option_type=SlashCommandOptionType.USER,
@@ -214,6 +236,7 @@ async def _bank_print(ctxt:SlashContext, user:discord.Member=None, lastn:int=5):
     subcommand_group='balance',
     name='get',
     description='Show current company bank balance',
+    base_default_permission=False,
 )
 async def _bank_get_balance(ctxt:SlashContext):
     results = brisket_db.query(f"SELECT {BankTable.AMNT_COL} FROM {BankTable.TABLE_NAME} ORDER BY {BankTable.XACTID_COL} ASC")
@@ -226,6 +249,7 @@ async def _bank_get_balance(ctxt:SlashContext):
     subcommand_group='balance',
     name='setinit',
     description='Set initial bank balance. All logged donations will be summed into this value',
+    base_default_permission=False,
     options=[
         create_option(name='initbal',
             description='Initial balance',
@@ -234,10 +258,6 @@ async def _bank_get_balance(ctxt:SlashContext):
         )
     ]
 )
-@slash.permission(guild_id=GUILD_ID,
-    permissions=[
-        create_permission(894808140837691433,SlashCommandPermissionType.ROLE,True)
-    ])
 async def _bank_set_balance(ctxt:SlashContext, initbal:str):
     initbal = float(initbal) // 0.01 / 100 # truncate to two decimal places
     BankTable.updateBankLog(brisket_db, 0, initbal, date=datetime.date.today(), note="Initial Balance")
@@ -249,6 +269,7 @@ skill_slash_choices = [create_choice(name=skill.name,value=skill.value) for skil
 @slash.subcommand(base="skilllvls",
     name="add",
     description="Log a life skill level",
+    base_default_permission=False,
     options=[
         create_option(name="skill",
             description="Trade Skill",
@@ -283,6 +304,7 @@ async def _skill_add(ctxt:SlashContext,skill:int,lvl:int,date:str=None):
 @slash.subcommand(base="skilllvls",
     name="edit",
     description="Log a life skill level",
+    base_default_permission=False,
     options=[
         create_option(name="log_id",
             description="ID of skill log to edit",
@@ -292,7 +314,7 @@ async def _skill_add(ctxt:SlashContext,skill:int,lvl:int,date:str=None):
         create_option(name="skill",
             description="Trade skill",
             required=False,
-            option_type=SlashCommandOptionType.STRING,
+            option_type=SlashCommandOptionType.INTEGER,
             choices=skill_slash_choices
         ),
         create_option(name="lvl",
@@ -306,7 +328,7 @@ async def _skill_add(ctxt:SlashContext,skill:int,lvl:int,date:str=None):
             option_type=SlashCommandOptionType.STRING
         )
     ]
-        )
+)
 async def _skill_edit(ctxt:SlashContext, log_id:int, skill:str=None,lvl:int=None,date:str=None):
     # Check if record exists
     try:
@@ -337,6 +359,7 @@ async def _skill_edit(ctxt:SlashContext, log_id:int, skill:str=None,lvl:int=None
 @slash.subcommand(base="skilllvls",
     name="delete",
     description="Delete a trade skill level",
+    base_default_permission=False,
     options=[
         create_option(name="log_id",
             description="ID of skill update to delete",
@@ -359,13 +382,14 @@ async def _skill_delete(ctxt:SlashContext, log_id:int):
     if record_id != caller_id:
         record_name = ctxt.guild.get_member(record_id).display_name
         await ctxt.send(f"You do not have permission to modify this record by {record_name}.")
-            return
+        return
     else:
         SkillDB.SkillLogTable.deleteSkillLog(brisket_db, log_id)
 
 @slash.subcommand(base="skilllvls",
     name="view",
     description="Display skill logs",
+    base_default_permission=False,
     options=[
         create_option(name='user',
             option_type=SlashCommandOptionType.USER,
@@ -374,7 +398,7 @@ async def _skill_delete(ctxt:SlashContext, log_id:int):
         ),
         create_option(name='skill',
             description="Skill to show",
-            option_type=SlashCommandOptionType.STRING,
+            option_type=SlashCommandOptionType.INTEGER,
             choices=skill_slash_choices,
             required=False
         ),
@@ -384,9 +408,7 @@ async def _skill_delete(ctxt:SlashContext, log_id:int):
             option_type=SlashCommandOptionType.INTEGER
         ),
         create_option(name='best',
-            description="""If searching by skill only, set this option to true 
-            to return the lastn users with the highest levels in that skill. 
-            If searching by user only, returns user's highest level in each skill""",
+            description="""Return best users in skill or users highest level in all skill""",
             required=False,
             option_type=SlashCommandOptionType.BOOLEAN
         )
@@ -395,7 +417,7 @@ async def _skill_delete(ctxt:SlashContext, log_id:int):
 async def _skill_show(ctxt:SlashContext, user:Member=None, skill:str=None, lastn:int=5, best:bool=False):
     member_id = None
     skill_id = None
-        
+
     # Get specified user and skill IDs
     if user != None:
         member_id = user.id
@@ -465,26 +487,13 @@ async def _skill_show(ctxt:SlashContext, user:Member=None, skill:str=None, lastn
     table_str = bu.formatTable(bu.listDictToDictList(list(results)))
     await ctxt.send(table_str)
 #################################################################
+        
+## Weapon Table Slash Commands ##################################
+weapon_slash_choices = [create_choice(name=weap.name, value=weap.value) for weap in WeaponDB.Weapons]
 
-            # Parse componetns of command string
 
-@slash.slash(name='closes',
-    description="Close bot")
-async def _close_bot(ctxt:SlashContext):
-    await bot.close()
+#################################################################
 
-## Bot Events ###################################################
-@bot.event
-async def on_ready():
-    print("Ready!")  
-    guild = bot.get_guild(GUILD_ID)
-    channel = guild.get_channel(896038294297649184)
-
-@bot.event
-async def on_error():
-    print("Error Event!")
-    await bot.close()
-###################################################################
 
     
 bot.run(TOKEN)
