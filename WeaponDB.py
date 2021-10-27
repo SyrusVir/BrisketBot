@@ -25,6 +25,12 @@ class Weapons(IntEnum):
         FIRESTAFF = auto() 
         LIFESTAFF = auto() 
         ICEGAUNTLET = auto() 
+        VOIDGAUNTLET = auto()
+        BLUNDERBUSS = auto()
+        DAGGER = auto()
+        ONEHANDCLUB = auto()
+        TWOHANDCLUB = auto()
+        PISTOL = auto()
 
 class WeaponCategTable():
     TABLE_NAME = "weaponcategories"    
@@ -33,11 +39,10 @@ class WeaponCategTable():
     WEAPONCATID_COL = "WeaponCategID"
 
     
-
     def initWeaponCategTable(db:Database):
         table_data = [{
             WeaponCategTable.ID_COL : cat.value,
-            WeaponCategTable.NAME_COL: cat.name.lower(),
+            WeaponCategTable.NAME_COL: cat.name,
         } for cat in WeaponCategs]
 
         db[WeaponCategTable.TABLE_NAME].insert_all(table_data,pk=WeaponCategTable.ID_COL,ignore=True)
@@ -49,10 +54,10 @@ class WeaponsTable():
     WEAPONCATEGID_COL = "WeaponCategid"
     NAME_COL = "Weapon"
 
-    ONE_HAND_WEAPONS = [Weapons.RAPIER, Weapons.SWORD, Weapons.HATCHET]
-    TWO_HAND_WEAPONS = [Weapons.WARHAMMER, Weapons.BATTLEAXE, Weapons.SPEAR]
-    RANGE_WEAPONS = [Weapons.BOW, Weapons.MUSKET]
-    MAGIC_WEAPONS = [Weapons.FIRESTAFF, Weapons.LIFESTAFF, Weapons.ICEGAUNTLET]
+    ONE_HAND_WEAPONS = [Weapons.RAPIER, Weapons.SWORD, Weapons.HATCHET, Weapons.ONEHANDCLUB, Weapons.DAGGER]
+    TWO_HAND_WEAPONS = [Weapons.WARHAMMER, Weapons.BATTLEAXE, Weapons.SPEAR, Weapons.TWOHANDCLUB]
+    RANGE_WEAPONS = [Weapons.BOW, Weapons.MUSKET, Weapons.BLUNDERBUSS, Weapons.PISTOL]
+    MAGIC_WEAPONS = [Weapons.FIRESTAFF, Weapons.LIFESTAFF, Weapons.ICEGAUNTLET, Weapons.VOIDGAUNTLET]
 
     def initWeaponTable(db : Database):
         weapon_table = db[WeaponsTable.TABLE_NAME]
@@ -157,6 +162,9 @@ if __name__ == "__main__":
     db = Database('test1.db')
     WeaponsTable.initWeaponTable(db)
 
+    print("Weapons")
+    for r in db[Weapons].rows:
+        print(r)
     print("Weapons Table")
     for r in db[WeaponsTable.TABLE_NAME].rows:
         print(r)
