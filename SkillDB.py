@@ -167,44 +167,6 @@ class SkillLogTable():
     def deleteSkillLog(db: Database, log_id:int):
         db[SkillTable.TABLE_NAME].delete(log_id)
 
-    def getUserSkills(db : Database, member_id:int):
-        """Retrieves the specified users' most recent entries in the SkillLogTable for each skill
-
-        :param db: A database containing a SkillLogTable table
-        :type db: Database
-        :param member_id: Discord ID of the user 
-        :type member_id: int
-        """
-        results = db.query(f"""SELECT t1.*
-        FROM {SkillLogTable.TABLE_NAME} t1 
-        INNER JOIN (SELECT {SkillLogTable.SKILLID_COL}, MAX({SkillLogTable.LEVEL_COL}) {SkillLogTable.LEVEL_COL}
-            FROM {SkillLogTable.TABLE_NAME}
-            GROUP BY {SkillLogTable.SKILLID_COL}
-            HAVING {SkillLogTable.MEMBERID_COL} = {member_id}) t2
-        ON t1.{SkillLogTable.SKILLID_COL} = t2.{SkillLogTable.SKILLID_COL} AND t1.{SkillLogTable.LEVEL_COL} = t2.{SkillLogTable.LEVEL_COL}
-        """)
-
-        return results
-
-    def getTopNSkill(db:Database, skill_id:Skills, n:int=5):
-        """Retrieve the N users with the highest level in the specified skill
-
-        :param db: A sqlite-utils database object
-        :type db: Database
-        :param skill: A value from the Skills enum
-        :type skill: Skills
-        :param n: Number of users to retrieve , defaults to 5
-        :type n: int, optional
-        """
-        return db.query(f"""SELECT * 
-        FROM {SkillLogTable.TABLE_NAME} t1
-        INNER JOIN (SELECT {SkillLogTable.MEMBERID_COL}, MAX({SkillLogTable.LEVEL_COL}) {SkillLogTable.LEVEL_COL}
-            FROM {SkillLogTable.TABLE_NAME}
-            GROUP BY {SkillLogTable.MEMBERID_COL}
-            HAVING {SkillLogTable.SKILLID_COL} = {skill_id}) t2
-        ON t1.{SkillLogTable.MEMBERID_COL} = t2.{SkillLogTable.MEMBERID_COL} AND t1.{SkillLogTable.LEVEL_COL} = t2.{SkillLogTable.LEVEL_COL}
-        ORDER BY {SkillLogTable.LEVEL_COL} DESC
-        LIMIT {n}""")
 
 if __name__ == "__main__":
     from random import randint
@@ -226,27 +188,51 @@ if __name__ == "__main__":
     id = list(range(len(names)))
     MemberTable.upsertMembers(db, names, id)
 
-    # Randomly generate table data 
-    # for i in range(7):
-    #     id = randint(0,len(names)-1)
-    #     skill_id = randint(1,5)
-    #     lvl = randint(1, 50)
-    #     SkillLogTable.insertSkillLog(db, id, skill_id, lvl)
-    # SkillLogTable.insertSkillLog(db,0,12,55)
+    
+    member_ids = [0 ,0 ,0 ,0,1 ,1,1,2 ,2 ,3 ,0]
+    skill_ids =  [0 ,1 ,2 ,3,1 ,2,3,2 ,3 ,3 ,2]
+    lvls =       [45,22,99,2,70,3,3,55,54,98,46]
+
+    test_skill_logs = [
+        {SkillLogTable.MEMBERID_COL : uid,
+         SkillLogTable.SKILLID_COL: sid,
+         SkillLogTable.LEVEL_COL : lvl}
+         for uid,sid,lvl in zip(member_ids,skill_ids,lvls)
+    ]
+
+    db[SkillLogTable.TABLE_NAME].insert_all(test_skill_logs,truncate=True)
+
     print("Skill Logs")
     brisketutils.printTable(db[SkillLogTable.TABLE_NAME])
-    
-    # print("User Query Results:")
 
-    # for r in SkillLogTable.getUserSkills(db, 0):
-    #     print(r)
+    print("Getting User Top Skills")
+    results = db.query(f"""SELECT t1.*
+    FROM {SkillLogTable.TABLE_NAME} t1
+    INNER JOIN (SELECT {SkillLogTable.MEMBERID_COL}, {SkillLogTable.SKILLID_COL}, MAX({SkillLogTable.LEVEL_COL}) max_lvl
+        FROM {SkillLogTable.TABLE_NAME}
+        GROUP BY {SkillLogTable.MEMBERID_COL}, {SkillLogTable.SKILLID_COL}
+        HAVING {SkillLogTable.MEMBERID_COL} = {1}) t2
+    ON t1.{SkillLogTable.MEMBERID_COL} = t2.{SkillLogTable.MEMBERID_COL} 
+    AND t1.{SkillLogTable.LEVEL_COL} = t2.max_lvl
+    AND t1.{SkillLogTable.SKILLID_COL} = t2.{SkillLogTable.SKILLID_COL}
+    """)
 
-    print("Top N Results:")
-    results = db.query(f"""SELECT {SkillLogTable.MEMBERID_COL}, {SkillLogTable.SKILLID_COL}, MAX({SkillLogTable.LEVEL_COL}) {SkillLogTable.LEVEL_COL}
-            FROM {SkillLogTable.TABLE_NAME}
-            GROUP BY {SkillLogTable.SKILLID_COL}
-            --HAVING {SkillLogTable.MEMBERID_COL} = {1}
-        """) #SkillLogTable.getTopNSkill(db, 2, 10)
+    for r in results:
+        print(r)
+
+    print("Top N Results Of Skill:")
+    results = db.query(f"""SELECT t1.*
+    FROM {SkillLogTable.TABLE_NAME} t1
+    INNER JOIN (SELECT {SkillLogTable.MEMBERID_COL}, {SkillLogTable.SKILLID_COL}, MAX({SkillLogTable.LEVEL_COL}) max_lvl
+        FROM {SkillLogTable.TABLE_NAME}
+        GROUP BY {SkillLogTable.MEMBERID_COL}, {SkillLogTable.SKILLID_COL}
+        HAVING {SkillLogTable.SKILLID_COL} = {2}) t2
+    ON t1.{SkillLogTable.MEMBERID_COL} = t2.{SkillLogTable.MEMBERID_COL} 
+    AND t1.{SkillLogTable.LEVEL_COL} = t2.max_lvl
+    AND t1.{SkillLogTable.SKILLID_COL} = t2.{SkillLogTable.SKILLID_COL}
+    ORDER BY {SkillLogTable.LEVEL_COL} DESC
+    --LIMIT {2}
+    """) #SkillLogTable.getTopNSkill(db, 2, 10)
     
     for r in results:
         print(r)

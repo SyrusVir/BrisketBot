@@ -243,42 +243,228 @@ async def _bank_set_balance(ctxt:SlashContext, initbal:str):
     BankTable.updateBankLog(brisket_db, 0, initbal, date=datetime.date.today(), note="Initial Balance")
 #################################################################
 
-        # Open reference to database
-        self.db = Database(self.DB_FILE)
+## Skill Table Slash Commands ###################################
+skill_slash_choices = [create_choice(name=skill.name,value=skill.value) for skill in SkillDB.Skills]
 
-    ## Player Table Methods ############################################################
-    def initPlayerTable(self):
-        guild = self.get_guild(self.GUILD_ID)
-        if guild == None:
-            print("Guild not found")
-
-    ## Asynchronous Methods ==========================================
-    async def on_ready(self):
-        for guild in self.guilds:
-            if guild.name == self.GUILD:
-                self.GUILD_ID = guild.id
-                break
-
-        print(
-            f'{self.user} is connected to the following guild:\n'
-            f'{guild.name}(id: {guild.id})\n'
+@slash.subcommand(base="skilllvls",
+    name="add",
+    description="Log a life skill level",
+    options=[
+        create_option(name="skill",
+            description="Trade Skill",
+            required=True,
+            option_type=SlashCommandOptionType.INTEGER,
+            choices=skill_slash_choices
+        ),
+        create_option(name="lvl",
+            description="New skill level",
+            required=True,
+            option_type=SlashCommandOptionType.INTEGER
+        ),
+        create_option(name="date",
+            description="Day of level up",
+            required=False,
+            option_type=SlashCommandOptionType.STRING
         )
-
-        members = '\n - '.join([f"{member.name},{member.id}" for member in guild.members])
-        print(f'Guild Members:\n - {members}')
-
-        await self.close()
-
-    async def on_message(self, message: discord.Message):
-        # do not react to messages from bot itself
-        if message.author == self.user:
+    ]
+)
+async def _skill_add(ctxt:SlashContext,skill:int,lvl:int,date:str=None):
+    if date != None:
+        try:
+            date = datetime.date.fromisoformat(date)
+        except ValueError as err:
+            new_err = str(err) + '. Require date format YYYY-MM-DD.'
+            await ctxt.send(new_err)
             return
+
+    member_id = ctxt.author_id
+    SkillDB.SkillLogTable.insertSkillLog(brisket_db, member_id, skill, date)
+
+@slash.subcommand(base="skilllvls",
+    name="edit",
+    description="Log a life skill level",
+    options=[
+        create_option(name="log_id",
+            description="ID of skill log to edit",
+            required=True,
+            option_type=SlashCommandOptionType.INTEGER
+        ),
+        create_option(name="skill",
+            description="Trade skill",
+            required=False,
+            option_type=SlashCommandOptionType.STRING,
+            choices=skill_slash_choices
+        ),
+        create_option(name="lvl",
+            description="New level",
+            required=False,
+            option_type=SlashCommandOptionType.INTEGER
+        ),
+        create_option(name="date",
+            description="New date",
+            required=False,
+            option_type=SlashCommandOptionType.STRING
+        )
+    ]
+        )
+async def _skill_edit(ctxt:SlashContext, log_id:int, skill:str=None,lvl:int=None,date:str=None):
+    # Check if record exists
+    try:
+        skilllog = brisket_db[SkillDB.SkillLogTable.TABLE_NAME].get(log_id)
+    except NotFoundError:
+        await ctxt.send(f"Transaction #{log_id} does not exist.")
+        return
+
+    # Get Skill ID
+    skill_id = None
+    if skill != None:
+        try:
+            row = brisket_db[SkillDB.SkillTable.TABLE_NAME].rows_where(f"{SkillDB.SkillTable.NAME_COL} = {skill}", limit=1)
+            skill_id = next(row)[SkillDB.SkillTable.SKILLID_COL]
+        except:
+            await ctxt.send(f"Could not find skill ID for {skill}.")
+
+    # Check that caller created record to delete
+    caller_id = ctxt.author_id
+    record_id = skilllog[SkillDB.SkillLogTable.MEMBERID_COL] 
+    if record_id != caller_id:
+        record_name = ctxt.guild.get_member(record_id).display_name
+        await ctxt.send(f"You do not have permission to modify this record by {record_name}.")
+        return
+    else:
+        SkillDB.SkillLogTable.updateSkillLog(brisket_db, log_id, skill_id, lvl, date)
+
+@slash.subcommand(base="skilllvls",
+    name="delete",
+    description="Delete a trade skill level",
+    options=[
+        create_option(name="log_id",
+            description="ID of skill update to delete",
+            required=True,
+            option_type=SlashCommandOptionType.INTEGER
+        )
+    ]
+)
+async def _skill_delete(ctxt:SlashContext, log_id:int):
+    # Check if record exists
+    try:
+        skilllog = brisket_db[SkillDB.SkillLogTable.TABLE_NAME].get(log_id)
+    except NotFoundError:
+        await ctxt.send(f"Transaction #{log_id} does not exist.")
+        return
+
+    # Check that caller created record to delete
+    caller_id = ctxt.author_id
+    record_id = skilllog[SkillDB.SkillLogTable.MEMBERID_COL] 
+    if record_id != caller_id:
+        record_name = ctxt.guild.get_member(record_id).display_name
+        await ctxt.send(f"You do not have permission to modify this record by {record_name}.")
+            return
+    else:
+        SkillDB.SkillLogTable.deleteSkillLog(brisket_db, log_id)
+
+@slash.subcommand(base="skilllvls",
+    name="view",
+    description="Display skill logs",
+    options=[
+        create_option(name='user',
+            option_type=SlashCommandOptionType.USER,
+            description="View user's skill. Default shows users current skill levels",
+            required=False,
+        ),
+        create_option(name='skill',
+            description="Skill to show",
+            option_type=SlashCommandOptionType.STRING,
+            choices=skill_slash_choices,
+            required=False
+        ),
+        create_option(name='lastn',
+            description="Display the last N skill logs",
+            required=False,
+            option_type=SlashCommandOptionType.INTEGER
+        ),
+        create_option(name='best',
+            description="""If searching by skill only, set this option to true 
+            to return the lastn users with the highest levels in that skill. 
+            If searching by user only, returns user's highest level in each skill""",
+            required=False,
+            option_type=SlashCommandOptionType.BOOLEAN
+        )
+    ]
+)
+async def _skill_show(ctxt:SlashContext, user:Member=None, skill:str=None, lastn:int=5, best:bool=False):
+    member_id = None
+    skill_id = None
         
-        # Check if message is a command
-        m = re.match(f"^{self.CMD_FLAG}",message.content)
-        if m != None:
-            # If match, get string after command flag
-            cmd_str = message.content[m.end():]
+    # Get specified user and skill IDs
+    if user != None:
+        member_id = user.id
+    if skill != None:
+        row = next(brisket_db[SkillDB.SkillTable.TABLE_NAME].rows_where(f"{SkillDB.SkillTable.NAME_COL} = {skill}"))
+        skill_id = row[SkillDB.SkillTable.SKILLID_COL]
+
+    # If no parameters passed, show last N entries
+    if member_id == None and skill_id == None:
+        query_str = f"""SELECT * 
+            FROM {SkillDB.SkillLogTable.TABLE_NAME}
+            ORDER BY {SkillDB.SkillLogTable.DATE_COL} DESC
+            LIMIT {lastn}"""
+    
+    # Else if both user and skill provided show last N entries of users entries for specified skill
+    elif member_id != None and skill != None:
+        query_str = f"""SELECT *
+        FROM {SkillDB.SkillLogTable.TABLE_NAME}
+        WHERE {SkillDB.SkillLogTable.SKILLID_COL} = {skill_id} 
+            AND {SkillDB.SkillLogTable.MEMBERID_COL} = {member_id}
+        ORDER BY {SkillDB.SkillLogTable.DATE_COL} DESC
+        LIMIT {lastn}
+        """
+    
+    ## If this point reached, then either member_id or skill is None, but not both ##
+
+    # Else if no user provided but skill provided, show last N entries for specified skill.
+    # If best specified, return lastn players with highest level in that skill
+    elif skill_id != None: 
+        if best:
+            query_str = f"""SELECT t1.*
+                FROM {SkillDB.SkillLogTable.TABLE_NAME} t1
+                INNER JOIN (SELECT {SkillDB.SkillLogTable.MEMBERID_COL}, {SkillDB.SkillLogTable.SKILLID_COL}, MAX({SkillDB.SkillLogTable.LEVEL_COL}) max_lvl
+                    FROM {SkillDB.SkillLogTable.TABLE_NAME}
+                    GROUP BY {SkillDB.SkillLogTable.MEMBERID_COL}, {SkillDB.SkillLogTable.SKILLID_COL}
+                    HAVING {SkillDB.SkillLogTable.SKILLID_COL} = {skill_id}) t2
+                ON t1.{SkillDB.SkillLogTable.MEMBERID_COL} = t2.{SkillDB.SkillLogTable.MEMBERID_COL} 
+                AND t1.{SkillDB.SkillLogTable.LEVEL_COL} = t2.max_lvl
+                AND t1.{SkillDB.SkillLogTable.SKILLID_COL} = t2.{SkillDB.SkillLogTable.SKILLID_COL}
+                ORDER BY {SkillDB.SkillLogTable.LEVEL_COL} DESC
+                LIMIT {lastn}
+                """
+        else:
+            query_str = f"""SELECT *
+            FROM {SkillDB.SkillLogTable.TABLE_NAME}
+            WHERE {SkillDB.SkillLogTable.SKILLID_COL} = {skill_id}
+            ORDER BY {SkillDB.SkillLogTable.DATE_COL} ASC
+            LIMIT {lastn}
+            """
+            
+    # Else if no skill provided but user provided, show user's most recent entry for each skill
+    # If best specified, return user's highest level in each skill
+    elif member_id != None:
+        query_str = f"""SELECT t1.*
+                FROM {SkillDB.SkillLogTable.TABLE_NAME} t1
+                INNER JOIN (SELECT {SkillDB.SkillLogTable.MEMBERID_COL}, {SkillDB.SkillLogTable.SKILLID_COL}, MAX({SkillDB.SkillLogTable.LEVEL_COL}) max_lvl
+                    FROM {SkillDB.SkillLogTable.TABLE_NAME}
+                    GROUP BY {SkillDB.SkillLogTable.MEMBERID_COL}, {SkillDB.SkillLogTable.SKILLID_COL}
+                    HAVING {SkillDB.SkillLogTable.MEMBERID_COL} = {member_id}) t2
+                ON t1.{SkillDB.SkillLogTable.MEMBERID_COL} = t2.{SkillDB.SkillLogTable.MEMBERID_COL} 
+                AND t1.{SkillDB.SkillLogTable.LEVEL_COL} = t2.max_lvl
+                AND t1.{SkillDB.SkillLogTable.SKILLID_COL} = t2.{SkillDB.SkillLogTable.SKILLID_COL}
+                ORDER BY {SkillDB.SkillLogTable.LEVEL_COL} DESC
+                """
+
+    results = brisket_db.query(query_str)
+    table_str = bu.formatTable(bu.listDictToDictList(list(results)))
+    await ctxt.send(table_str)
+#################################################################
 
             # Parse componetns of command string
 
