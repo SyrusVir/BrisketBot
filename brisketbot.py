@@ -1,22 +1,19 @@
+from asyncio.windows_events import SelectorEventLoop
 import datetime
 import os
 import re
 from typing import Generator, List
-import discord  
+import discord
 from discord import guild
 from discord import member
-from discord.ext import commands
 from discord.member import Member
-from discord_slash import SlashCommand, SlashContext
-from discord_slash.model import SlashCommandOptionType, SlashCommandPermissionType
-from discord_slash.utils.manage_commands import create_choice, create_option, create_permission
+# from discord.ext.commands import SlashCommand, SlashContext
 from sqlite_utils import Database
 from enum import IntEnum
 from dotenv import load_dotenv
 from sqlite_utils.db import NotFoundError, Table
 from BrisketDB import BrisketDB
 import brisketutils as bu
-
 # Database imports
 from MemberDB import MemberTable
 import WeaponDB
@@ -31,15 +28,25 @@ BRISKET_GUILD_ID = int(os.getenv('BRISKET_GUILD'))
 CMD_FLAG = '>>'
 DB_FILE = 'brisket.db'
 
-## Restrict slash commands to users with Dev role
-allowed_slash_roles = []
-brisket_perms = {BRISKET_GUILD_ID : create_permission(898814200040812585, SlashCommandPermissionType.ROLE, True)}
+## Brisket Brethren Role IDs
+allowed_roles = {
+    'governor' : 894808140837691433,
+    'consul'   : 894806976016572477,
+    'officer'  : 894807444230914068,
+    'settler'  : 894807523654238229
+}
+
+## Restrict slash commands to brisket bros with dev role; on debug guild allow me to use all commands
+perms_allow_devs = {BRISKET_GUILD_ID : [create_permission(898814200040812585, SlashCommandPermissionType.ROLE, True)]}
+perm_allow_me = {DEBUG_GUILD_ID : [create_permission(406849788303114241, SlashCommandPermissionType.USER, True)]}
+all_perms = {**perms_allow_devs, **perm_allow_me}
+all_perms = perm_allow_me
 
 ## Instantiating Bot and slash objects
 intents = discord.Intents.default()
 intents.members = True
-bot = commands.Bot(command_prefix=CMD_FLAG, intents=intents)
-slash = SlashCommand(bot, sync_commands=True)
+bot = discord.Bot(command_prefix=CMD_FLAG, intents=intents)
+bot.
 
 ## Initializing database
 brisket_db = BrisketDB(DB_FILE)
@@ -48,8 +55,26 @@ brisket_db = BrisketDB(DB_FILE)
 @bot.event
 async def on_ready():
     print("Ready!")  
-    guild = bot.get_guild(DEBUG_GUILD_ID)
-    channel = guild.get_channel(896038294297649184)
+    
+    # Get Brisket Brethren guild object
+    # If found, populate members table 
+    brisket_guild = bot.get_guild(BRISKET_GUILD_ID)
+    print(brisket_guild)
+    allowed_role_obj = [brisket_guild.get_role(rid) for rid in allowed_roles.values()]
+    
+    member_ids = []
+    member_names = []
+    for rid in allowed_roles.values():
+        role = brisket_guild.get_role(rid)
+        for m in role.members:
+            if m.id not in member_ids:
+                member_ids.append(m.id)
+                member_names.append(m.display_name)   
+    
+    MemberTable.upsertMembers(brisket_db, member_name=member_names, discord_ids=member_ids)
+    for r in brisket_db[MemberTable.TABLE_NAME].rows:
+        print(r)
+
 
 @bot.event
 async def on_error(event:str, *args, **kwargs):
@@ -58,17 +83,19 @@ async def on_error(event:str, *args, **kwargs):
 ###################################################################
 
 ## Test Slash Commands ############################################
-@slash.slash(name="ping",
+@bot.slash(name="ping",
     description="A test slash command",
-    default_permission=False,
-    permissions={DEBUG_GUILD_ID: [create_permission(896037378156802068, SlashCommandPermissionType.USER,True)]},
+    default_permission=True,
 )
-async def ping(ctxt: SlashContext):
+
+async def ping(ctxt:SlashContext):
     await ctxt.send("pong")
 
 @slash.slash(name='closebot',
     default_permission=False,
-    description="Close bot")
+    permissions=perm_allow_me,
+    description="Close bot"
+)
 async def _close_bot(ctxt:SlashContext):
     await bot.close()
 ##########################################################################
@@ -78,6 +105,7 @@ async def _close_bot(ctxt:SlashContext):
     name='add',
     description="Record donation to company bank",
     base_default_permission=False,
+    base_permissions=all_perms,
     options=[
         create_option(name="amount",
             description="Donation amount",
@@ -270,6 +298,7 @@ skill_slash_choices = [create_choice(name=skill.name,value=skill.value) for skil
     name="add",
     description="Log a life skill level",
     base_default_permission=False,
+    base_permissions= all_perms,
     options=[
         create_option(name="skill",
             description="Trade Skill",
