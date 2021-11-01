@@ -33,8 +33,9 @@ DB_FILE = 'brisket.db'
 
 ## Restrict slash commands to users with Dev role
 allowed_slash_roles = []
-brisket_perms = {BRISKET_GUILD_ID : create_permission(898814200040812585, SlashCommandPermissionType.ROLE, True)}
-
+brisket_perms = {BRISKET_GUILD_ID : [create_permission(898814200040812585, SlashCommandPermissionType.ROLE, True)]}
+allow_me = {DEBUG_GUILD_ID : [create_permission(406849788303114241, SlashCommandPermissionType.USER,True)]}
+all_perms = {**brisket_perms, **allow_me}
 ## Instantiating Bot and slash objects
 intents = discord.Intents.default()
 intents.members = True
@@ -61,7 +62,7 @@ async def on_error(event:str, *args, **kwargs):
 @slash.slash(name="ping",
     description="A test slash command",
     default_permission=False,
-    permissions={DEBUG_GUILD_ID: [create_permission(896037378156802068, SlashCommandPermissionType.USER,True)]},
+    permissions=all_perms,
 )
 async def ping(ctxt: SlashContext):
     await ctxt.send("pong")
@@ -78,6 +79,7 @@ async def _close_bot(ctxt:SlashContext):
     name='add',
     description="Record donation to company bank",
     base_default_permission=False,
+    base_permissions=brisket_perms,
     options=[
         create_option(name="amount",
             description="Donation amount",
@@ -230,7 +232,6 @@ async def _bank_print(ctxt:SlashContext, user:discord.Member=None, lastn:int=5):
         
     string = bu.formatTable(new_dict)
     await ctxt.send(string)
-    
 
 @slash.subcommand(base='bank',
     subcommand_group='balance',
@@ -270,6 +271,7 @@ skill_slash_choices = [create_choice(name=skill.name,value=skill.value) for skil
     name="add",
     description="Log a life skill level",
     base_default_permission=False,
+    base_permissions=all_perms,
     options=[
         create_option(name="skill",
             description="Trade Skill",
