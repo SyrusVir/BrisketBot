@@ -3,10 +3,8 @@ import os
 import re
 from typing import Generator, List
 import discord  
-from discord import guild
-from discord import member
+from discord import Guild, Member
 from discord.ext import commands
-from discord.member import Member
 from discord_slash import SlashCommand, SlashContext
 from discord_slash.model import SlashCommandOptionType, SlashCommandPermissionType
 from discord_slash.utils.manage_commands import create_choice, create_option, create_permission
@@ -31,11 +29,20 @@ BRISKET_GUILD_ID = int(os.getenv('BRISKET_GUILD'))
 CMD_FLAG = '>>'
 DB_FILE = 'brisket.db'
 
+## Brisket Brethren Role IDs
+allowed_roles = {
+    'governor' : 894808140837691433,
+    'consul'   : 894806976016572477,
+    'officer'  : 894807444230914068,
+    'settler'  : 894807523654238229
+}
+
 ## Restrict slash commands to users with Dev role
 allowed_slash_roles = []
 brisket_perms = {BRISKET_GUILD_ID : [create_permission(898814200040812585, SlashCommandPermissionType.ROLE, True)]}
 allow_me = {DEBUG_GUILD_ID : [create_permission(406849788303114241, SlashCommandPermissionType.USER,True)]}
 all_perms = {**brisket_perms, **allow_me}
+
 ## Instantiating Bot and slash objects
 intents = discord.Intents.default()
 intents.members = True
@@ -49,8 +56,25 @@ brisket_db = BrisketDB(DB_FILE)
 @bot.event
 async def on_ready():
     print("Ready!")  
-    guild = bot.get_guild(DEBUG_GUILD_ID)
-    channel = guild.get_channel(896038294297649184)
+    
+    # Get Brisket Brethren guild object
+    # If found, populate members table 
+    brisket_guild = bot.get_guild(BRISKET_GUILD_ID)
+    print(brisket_guild)
+    allowed_role_obj = [brisket_guild.get_role(rid) for rid in allowed_roles.values()]
+    
+    member_ids = []
+    member_names = []
+    for rid in allowed_roles.values():
+        role = brisket_guild.get_role(rid)
+        for m in role.members:
+            if m.id not in member_ids:
+                member_ids.append(m.id)
+                member_names.append(m.display_name)   
+    
+    MemberTable.upsertMembers(brisket_db, member_name=member_names, discord_ids=member_ids)
+    for r in brisket_db[MemberTable.TABLE_NAME].rows:
+        print(r)
 
 @bot.event
 async def on_error(event:str, *args, **kwargs):
