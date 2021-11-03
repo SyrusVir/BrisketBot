@@ -88,13 +88,13 @@ async def on_error(event:str, *args, **kwargs):
     default_permission=False,
     permissions=all_perms,
 )
-async def ping(ctxt: SlashContext):
-    await ctxt.send("pong")
+async def ping(ctx: SlashContext):
+    await ctx.send("pong")
 
 @slash.slash(name='closebot',
     default_permission=False,
     description="Close bot")
-async def _close_bot(ctxt:SlashContext):
+async def _close_bot(ctx:SlashContext):
     await bot.close()
 ##########################################################################
 
@@ -108,7 +108,7 @@ async def _close_bot(ctxt:SlashContext):
         create_option(name="amount",
             description="Donation amount",
             required=True,
-            option_type=SlashCommandOptionType.STRING
+            option_type=SlashCommandOptionType.FLOAT
         ),
         create_option(name="note",
             description="Add a comment to donation",
@@ -122,22 +122,18 @@ async def _close_bot(ctxt:SlashContext):
         )
     ]
 )
-async def _bank_add(ctxt:SlashContext,amount:str,note:str=None,date:str=None):
+async def _bank_add(ctx:SlashContext,amount:float,note:str=None,date:str=None):
     if date != None:
         try:
             date = datetime.date.fromisoformat(date)
         except ValueError as err:
             new_err = str(err) + '. Require date format YYYY-MM-DD.'
-            await ctxt.send(new_err)
+            await ctx.send(new_err)
             return
-    try:
-        amount = float(amount) // 0.01 / 100
-    except:
-        await ctxt.send("Could not convert amount from string to float")
-        return
 
-    id = ctxt.author_id
+    id = ctx.author_id
     BankTable.insertBankLog(brisket_db, member_id=id, amount=amount, note=note, date=date)
+    
 
 @slash.subcommand(base='bank',
     name='delete',
@@ -151,20 +147,20 @@ async def _bank_add(ctxt:SlashContext,amount:str,note:str=None,date:str=None):
         )
     ]
 )
-async def _bank_delete(ctxt:SlashContext,xactid:int):
+async def _bank_delete(ctx:SlashContext,xactid:int):
     # Check if record exists
     try:
         xaction = brisket_db[BankTable.TABLE_NAME].get(xactid)
     except NotFoundError:
-        await ctxt.send(f"Transaction #{xactid} does not exist.")
+        await ctx.send(f"Transaction #{xactid} does not exist.")
         return
     
     # Check that caller created record to delete
-    caller_id = ctxt.author_id
+    caller_id = ctx.author_id
     record_id = xaction[BankTable.MEMBERID_COL] 
     if record_id != caller_id:
-        record_name = ctxt.guild.get_member(record_id).display_name
-        await ctxt.send(f"You do not have permission to modify this record by {record_name}.")
+        record_name = ctx.guild.get_member(record_id).display_name
+        await ctx.send(f"You do not have permission to modify this record by {record_name}.")
         return
     else:
         BankTable.deleteBankLog(brisket_db, xactid)
@@ -195,20 +191,20 @@ async def _bank_delete(ctxt:SlashContext,xactid:int):
             option_type=SlashCommandOptionType.STRING
         )
     ])
-async def _bank_edit(ctxt: SlashContext, xactid:int, amount:str=None, date:str=None, note:str=None):
+async def _bank_edit(ctx: SlashContext, xactid:int, amount:str=None, date:str=None, note:str=None):
     # Check if record exists
     try:
         xaction = brisket_db[BankTable.TABLE_NAME].get(xactid)
     except NotFoundError:
-        await ctxt.send(f"Transaction #{xactid} does not exist.")
+        await ctx.send(f"Transaction #{xactid} does not exist.")
         return
     
     # Check that caller created record to delete
-    caller_id = ctxt.author_id
+    caller_id = ctx.author_id
     record_id = xaction[BankTable.MEMBERID_COL] 
     if record_id != caller_id:
-        record_name = ctxt.guild.get_member(record_id).display_name
-        await ctxt.send(f"You do not have permission to modify this record by {record_name}.")
+        record_name = ctx.guild.get_member(record_id).display_name
+        await ctx.send(f"You do not have permission to modify this record by {record_name}.")
         return
     else:
         amount = float(amount) // 0.01 / 100
@@ -230,7 +226,7 @@ async def _bank_edit(ctxt: SlashContext, xactid:int, amount:str=None, date:str=N
             option_type=SlashCommandOptionType.INTEGER
         )
     ])
-async def _bank_print(ctxt:SlashContext, user:discord.Member=None, lastn:int=5):   
+async def _bank_print(ctx:SlashContext, user:discord.Member=None, lastn:int=5):   
     if user != None:
         member_id = user.id
         results = brisket_db.query(f"""SELECT 
@@ -248,14 +244,14 @@ async def _bank_print(ctxt:SlashContext, user:discord.Member=None, lastn:int=5):
     
     dictList = bu.listDictToDictList(list(results))
 
-    member_names = [ctxt.guild.get_member(id).display_name if id != None else None for id in dictList[BankTable.MEMBERID_COL]]
+    member_names = [ctx.guild.get_member(id).display_name if id != None else None for id in dictList[BankTable.MEMBERID_COL]]
     
     new_dict = dictList
     del new_dict[BankTable.MEMBERID_COL]
     new_dict["Member"] = member_names
         
     string = bu.formatTable(new_dict)
-    await ctxt.send(string)
+    await ctx.send(string)
 
 @slash.subcommand(base='bank',
     subcommand_group='balance',
@@ -263,12 +259,12 @@ async def _bank_print(ctxt:SlashContext, user:discord.Member=None, lastn:int=5):
     description='Show current company bank balance',
     base_default_permission=False,
 )
-async def _bank_get_balance(ctxt:SlashContext):
+async def _bank_get_balance(ctx:SlashContext):
     results = brisket_db.query(f"SELECT {BankTable.AMNT_COL} FROM {BankTable.TABLE_NAME} ORDER BY {BankTable.XACTID_COL} ASC")
     bal = 0
     for r in results:
         bal = bal + r[BankTable.AMNT_COL]
-    await ctxt.send(f"Current Company Bank Balance: {bal // 0.01 / 100}")
+    await ctx.send(f"Current Company Bank Balance: {bal // 0.01 / 100}")
 
 @slash.subcommand(base='bank',
     subcommand_group='balance',
@@ -283,7 +279,7 @@ async def _bank_get_balance(ctxt:SlashContext):
         )
     ]
 )
-async def _bank_set_balance(ctxt:SlashContext, initbal:str):
+async def _bank_set_balance(ctx:SlashContext, initbal:str):
     initbal = float(initbal) // 0.01 / 100 # truncate to two decimal places
     BankTable.updateBankLog(brisket_db, 0, initbal, date=datetime.date.today(), note="Initial Balance")
 #################################################################
@@ -315,16 +311,16 @@ skill_slash_choices = [create_choice(name=skill.name,value=skill.value) for skil
         )
     ]
 )
-async def _skill_add(ctxt:SlashContext,skill:int,lvl:int,date:str=None):
+async def _skill_add(ctx:SlashContext,skill:int,lvl:int,date:str=None):
     if date != None:
         try:
             date = datetime.date.fromisoformat(date)
         except ValueError as err:
             new_err = str(err) + '. Require date format YYYY-MM-DD.'
-            await ctxt.send(new_err)
+            await ctx.send(new_err)
             return
 
-    member_id = ctxt.author_id
+    member_id = ctx.author_id
     SkillDB.SkillLogTable.insertSkillLog(brisket_db, member_id, skill, date)
 
 @slash.subcommand(base="skilllvls",
@@ -355,12 +351,12 @@ async def _skill_add(ctxt:SlashContext,skill:int,lvl:int,date:str=None):
         )
     ]
 )
-async def _skill_edit(ctxt:SlashContext, log_id:int, skill:str=None,lvl:int=None,date:str=None):
+async def _skill_edit(ctx:SlashContext, log_id:int, skill:str=None,lvl:int=None,date:str=None):
     # Check if record exists
     try:
         skilllog = brisket_db[SkillDB.SkillLogTable.TABLE_NAME].get(log_id)
     except NotFoundError:
-        await ctxt.send(f"Transaction #{log_id} does not exist.")
+        await ctx.send(f"Transaction #{log_id} does not exist.")
         return
 
     # Get Skill ID
@@ -370,14 +366,14 @@ async def _skill_edit(ctxt:SlashContext, log_id:int, skill:str=None,lvl:int=None
             row = brisket_db[SkillDB.SkillTable.TABLE_NAME].rows_where(f"{SkillDB.SkillTable.NAME_COL} = {skill}", limit=1)
             skill_id = next(row)[SkillDB.SkillTable.SKILLID_COL]
         except:
-            await ctxt.send(f"Could not find skill ID for {skill}.")
+            await ctx.send(f"Could not find skill ID for {skill}.")
 
     # Check that caller created record to delete
-    caller_id = ctxt.author_id
+    caller_id = ctx.author_id
     record_id = skilllog[SkillDB.SkillLogTable.MEMBERID_COL] 
     if record_id != caller_id:
-        record_name = ctxt.guild.get_member(record_id).display_name
-        await ctxt.send(f"You do not have permission to modify this record by {record_name}.")
+        record_name = ctx.guild.get_member(record_id).display_name
+        await ctx.send(f"You do not have permission to modify this record by {record_name}.")
         return
     else:
         SkillDB.SkillLogTable.updateSkillLog(brisket_db, log_id, skill_id, lvl, date)
@@ -394,20 +390,20 @@ async def _skill_edit(ctxt:SlashContext, log_id:int, skill:str=None,lvl:int=None
         )
     ]
 )
-async def _skill_delete(ctxt:SlashContext, log_id:int):
+async def _skill_delete(ctx:SlashContext, log_id:int):
     # Check if record exists
     try:
         skilllog = brisket_db[SkillDB.SkillLogTable.TABLE_NAME].get(log_id)
     except NotFoundError:
-        await ctxt.send(f"Transaction #{log_id} does not exist.")
+        await ctx.send(f"Transaction #{log_id} does not exist.")
         return
 
     # Check that caller created record to delete
-    caller_id = ctxt.author_id
+    caller_id = ctx.author_id
     record_id = skilllog[SkillDB.SkillLogTable.MEMBERID_COL] 
     if record_id != caller_id:
-        record_name = ctxt.guild.get_member(record_id).display_name
-        await ctxt.send(f"You do not have permission to modify this record by {record_name}.")
+        record_name = ctx.guild.get_member(record_id).display_name
+        await ctx.send(f"You do not have permission to modify this record by {record_name}.")
         return
     else:
         SkillDB.SkillLogTable.deleteSkillLog(brisket_db, log_id)
@@ -440,7 +436,7 @@ async def _skill_delete(ctxt:SlashContext, log_id:int):
         )
     ]
 )
-async def _skill_show(ctxt:SlashContext, user:Member=None, skill:str=None, lastn:int=5, best:bool=False):
+async def _skill_show(ctx:SlashContext, user:Member=None, skill:str=None, lastn:int=5, best:bool=False):
     member_id = None
     skill_id = None
 
@@ -511,7 +507,7 @@ async def _skill_show(ctxt:SlashContext, user:Member=None, skill:str=None, lastn
 
     results = brisket_db.query(query_str)
     table_str = bu.formatTable(bu.listDictToDictList(list(results)))
-    await ctxt.send(table_str)
+    await ctx.send(table_str)
 #################################################################
         
 ## Weapon Table Slash Commands ##################################
