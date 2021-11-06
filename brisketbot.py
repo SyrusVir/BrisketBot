@@ -52,6 +52,18 @@ slash = SlashCommand(bot, sync_commands=True)
 ## Initializing database
 brisket_db = BrisketDB(DB_FILE)
 
+## Reply decorator
+def replydec(func):
+    async def wrapper(ctxt:SlashContext,*args, **kwargs):
+        try:
+            await func(ctxt,*args,**kwargs)
+            await ctxt.send(f"Success!", hidden=True)
+        except Exception as err:
+            await ctxt.send(f"Got Error: {str(err)}",hidden=True)
+            raise(err)
+    
+    return wrapper
+
 ## Bot Events ###################################################
 @bot.event
 async def on_ready():
@@ -93,7 +105,9 @@ async def ping(ctx: SlashContext):
 
 @slash.slash(name='closebot',
     default_permission=False,
-    description="Close bot")
+    description="Close bot"
+)
+@replydec
 async def _close_bot(ctx:SlashContext):
     await bot.close()
 ##########################################################################
@@ -122,6 +136,7 @@ async def _close_bot(ctx:SlashContext):
         )
     ]
 )
+@replydec
 async def _bank_add(ctx:SlashContext,amount:float,note:str=None,date:str=None):
     if date != None:
         try:
@@ -147,6 +162,7 @@ async def _bank_add(ctx:SlashContext,amount:float,note:str=None,date:str=None):
         )
     ]
 )
+@replydec
 async def _bank_delete(ctx:SlashContext,xactid:int):
     # Check if record exists
     try:
@@ -190,7 +206,9 @@ async def _bank_delete(ctx:SlashContext,xactid:int):
             required=False,
             option_type=SlashCommandOptionType.STRING
         )
-    ])
+    ]
+)
+@replydec
 async def _bank_edit(ctx: SlashContext, xactid:int, amount:str=None, date:str=None, note:str=None):
     # Check if record exists
     try:
@@ -279,6 +297,7 @@ async def _bank_get_balance(ctx:SlashContext):
         )
     ]
 )
+@replydec
 async def _bank_set_balance(ctx:SlashContext, initbal:str):
     initbal = float(initbal) // 0.01 / 100 # truncate to two decimal places
     BankTable.updateBankLog(brisket_db, 0, initbal, date=datetime.date.today(), note="Initial Balance")
@@ -311,6 +330,7 @@ skill_slash_choices = [create_choice(name=skill.name,value=skill.value) for skil
         )
     ]
 )
+@replydec
 async def _skill_add(ctx:SlashContext,skill:int,lvl:int,date:str=None):
     if date != None:
         try:
@@ -351,6 +371,7 @@ async def _skill_add(ctx:SlashContext,skill:int,lvl:int,date:str=None):
         )
     ]
 )
+@replydec
 async def _skill_edit(ctx:SlashContext, log_id:int, skill:int=None,lvl:int=None,date:str=None):
     # Check if record exists
     try:
@@ -359,24 +380,15 @@ async def _skill_edit(ctx:SlashContext, log_id:int, skill:int=None,lvl:int=None,
         await ctx.send(f"Transaction #{log_id} does not exist.")
         return
 
-    # Get Skill ID
-    skill_id = None
-    if skill != None:
-        try:
-            row = brisket_db[SkillDB.SkillTable.TABLE_NAME].rows_where(f"{SkillDB.SkillTable.NAME_COL} = {skill}", limit=1)
-            skill_id = next(row)[SkillDB.SkillTable.SKILLID_COL]
-        except:
-            await ctx.send(f"Could not find skill ID for {skill}.")
-
     # Check that caller created record to delete
     caller_id = ctx.author_id
     record_id = skilllog[SkillDB.SkillLogTable.MEMBERID_COL] 
     if record_id != caller_id:
         record_name = ctx.guild.get_member(record_id).display_name
         await ctx.send(f"You do not have permission to modify this record by {record_name}.")
-        return
     else:
         SkillDB.SkillLogTable.updateSkillLog(brisket_db, log_id, skill, lvl, date)
+
 
 @slash.subcommand(base="skilllvls",
     name="delete",
@@ -390,6 +402,7 @@ async def _skill_edit(ctx:SlashContext, log_id:int, skill:int=None,lvl:int=None,
         )
     ]
 )
+@replydec
 async def _skill_delete(ctx:SlashContext, log_id:int):
     # Check if record exists
     try:
