@@ -521,8 +521,218 @@ async def _skill_show(ctx:SlashContext, user:Member=None, skill:int=None, lastn:
         
 ## Weapon Table Slash Commands ##################################
 weapon_slash_choices = [create_choice(name=weap.name, value=weap.value) for weap in WeaponDB.Weapons]
+@slash.subcommand(base='weaponlog',
+    name='add',
+    description="Record weapon level",
+    base_default_permission=False,
+    base_permissions=brisket_perms,
+    options=[
+        create_option(name="weapon",
+            description="Choose a weapon",
+            required=True,
+            option_type=SlashCommandOptionType.INTEGER,
+            choices=weapon_slash_choices
+        ),
+        create_option(name="lvl",
+            description="New weapon level",
+            required=True,
+            option_type=SlashCommandOptionType.INTEGER
+        ),
+        create_option(name="date",
+            description="Date as YYYY-MM-DD. Leave empty to default to today.",
+            required=False,
+            option_type=SlashCommandOptionType.STRING
+        )
+    ]
+)
+@replydec
+async def _weapon_add(ctx:SlashContext,weapon:int,lvl:int,date:str=None):
+    if date != None:
+        try:
+            date = datetime.date.fromisoformat(date)
+        except ValueError as err:
+            new_err = str(err) + '. Require date format YYYY-MM-DD.'
+            await ctx.send(new_err)
+            return
+
+    id = ctx.author_id
+    WeaponDB.WeaponLogTable.insertWeaponLog(brisket_db, member_id=id,weapon_id=weapon,lvl=lvl,date=date)
+    
+
+@slash.subcommand(base='weaponlog',
+    name='delete',
+    description="Delete company bank donation",
+    base_default_permission=False,
+    options=[
+        create_option(name="logid",
+            description="Weapon Log ID",
+            required=True,
+            option_type=SlashCommandOptionType.INTEGER
+        )
+    ]
+)
+@replydec
+async def _weapon_delete(ctx:SlashContext,logid:int):
+    # Check if record exists
+    try:
+        weapon_log = brisket_db[WeaponDB.WeaponLogTable.TABLE_NAME].get(logid)
+    except NotFoundError:
+        await ctx.send(f"Weapon Log #{logid} does not exist.")
+        return
+
+    # Check that caller created record to delete
+    caller_id = ctx.author_id
+    record_id = weapon_log[WeaponDB.WeaponLogTable.MEMBERID_COL] 
+    if record_id != caller_id:
+        record_name = ctx.guild.get_member(record_id).display_name
+        await ctx.send(f"You do not have permission to modify this record by {record_name}.")
+        return
+    else:
+        WeaponDB.WeaponLogTable.deleteWeaponLog(brisket_db, logid)
+
+@slash.subcommand(base='weaponlog',
+    name='edit',
+    description="Edit an existing record.",
+    base_default_permission=False,
+    options= [
+        create_option(name="logid",
+            required=True,
+            option_type=SlashCommandOptionType.INTEGER,
+            description="ID of record to edit"
+        ),
+        create_option(name="weapon",
+            required=False,
+            choices=weapon_slash_choices,
+            option_type=SlashCommandOptionType.INTEGER,
+            description="New weapon"
+        ),
+        create_option(name="lvl",
+            description="New weapon level",
+            required=False,
+            option_type=SlashCommandOptionType.INTEGER
+        ),
+        create_option(name="date",
+            description="New level date",
+            required=False,
+            option_type=SlashCommandOptionType.STRING
+        )
+    ])
+@replydec
+async def _weapon_edit(ctx: SlashContext, logid:int, weapon:int=None, lvl:int=None, date:str=None,):
+    # Check if record exists
+    try:
+        weapon_log = brisket_db[WeaponDB.WeaponLogTable.TABLE_NAME].get(logid)
+    except NotFoundError:
+        await ctx.send(f"Weapon Log #{logid} does not exist.")
+        return
+    
+    # Check that caller created record to delete
+    caller_id = ctx.author_id
+    record_id = weapon_log[WeaponDB.WeaponLogTable.MEMBERID_COL] 
+    if record_id != caller_id:
+        record_name = ctx.guild.get_member(record_id).display_name
+        await ctx.send(f"You do not have permission to modify this record by {record_name}.")
+        return
+    else:
+        WeaponDB.WeaponLogTable.updateWeaponLog(brisket_db, logid, weapon_id=weapon, lvl=lvl, date=date)
 
 
+@slash.subcommand(base="weaponlog",
+    name="view",
+    description="Display weapon logs",
+    base_default_permission=False,
+    options=[
+        create_option(name='user',
+            option_type=SlashCommandOptionType.USER,
+            description="View user's skill. Default shows users current weapon levels",
+            required=False,
+        ),
+        create_option(name='weapon',
+            description="Weapons to show",
+            option_type=SlashCommandOptionType.INTEGER,
+            choices=weapon_slash_choices,
+            required=False
+        ),
+        create_option(name='lastn',
+            description="Display the last N skill logs",
+            required=False,
+            option_type=SlashCommandOptionType.INTEGER
+        ),
+        create_option(name='best',
+            description="""Return best weapon users or users highest level in all weapons""",
+            required=False,
+            option_type=SlashCommandOptionType.BOOLEAN
+        )
+    ]
+)
+async def _weapon_show(ctx:SlashContext, user:Member=None, weapon:int=None, lastn:int=5, best:bool=False):
+    member_id = None
+    
+    # Get specified user and skill IDs
+    if user != None:
+        member_id = user.id
+
+    # If no parameters passed, show last N entries
+    if member_id == None and weapon == None:
+        query_str = f"""SELECT * 
+            FROM {WeaponDB.WeaponLogTable.TABLE_NAME}
+            ORDER BY {WeaponDB.WeaponLogTable.DATE_COL} DESC
+            LIMIT {lastn}"""
+    
+    # Else if both user and skill provided show last N entries of users entries for specified skill
+    elif member_id != None and weapon != None:
+        query_str = f"""SELECT *
+        FROM {WeaponDB.WeaponLogTable.TABLE_NAME}
+        WHERE {WeaponDB.WeaponLogTable.WEAPONID_COL} = {weapon} 
+            AND {WeaponDB.WeaponLogTable.MEMBERID_COL} = {member_id}
+        ORDER BY {WeaponDB.WeaponLogTable.DATE_COL} DESC
+        LIMIT {lastn}
+        """
+    
+    ## If this point reached, then either member_id or skill is None, but not both ##
+
+    # Else if no user provided but skill provided, show last N entries for specified skill.
+    # If best specified, return lastn players with highest level in that skill
+    elif weapon != None: 
+        if best:
+            query_str = f"""SELECT t1.*
+                FROM {WeaponDB.WeaponLogTable.TABLE_NAME} t1
+                INNER JOIN (SELECT {WeaponDB.WeaponLogTable.MEMBERID_COL}, {WeaponDB.WeaponLogTable.WEAPONID_COL}, MAX({WeaponDB.WeaponLogTable.LEVEL_COL}) max_lvl
+                    FROM {WeaponDB.WeaponLogTable.TABLE_NAME}
+                    GROUP BY {WeaponDB.WeaponLogTable.MEMBERID_COL}, {WeaponDB.WeaponLogTable.WEAPONID_COL}
+                    HAVING {WeaponDB.WeaponLogTable.WEAPONID_COL} = {weapon}) t2
+                ON t1.{WeaponDB.WeaponLogTable.MEMBERID_COL} = t2.{WeaponDB.WeaponLogTable.MEMBERID_COL} 
+                AND t1.{WeaponDB.WeaponLogTable.LEVEL_COL} = t2.max_lvl
+                AND t1.{WeaponDB.WeaponLogTable.WEAPONID_COL} = t2.{WeaponDB.WeaponLogTable.WEAPONID_COL}
+                ORDER BY {WeaponDB.WeaponLogTable.LEVEL_COL} DESC
+                LIMIT {lastn}
+                """
+        else:
+            query_str = f"""SELECT *
+            FROM {WeaponDB.WeaponLogTable.TABLE_NAME}
+            WHERE {WeaponDB.WeaponLogTable.WEAPONID_COL} = {weapon}
+            ORDER BY {WeaponDB.WeaponLogTable.DATE_COL} ASC
+            LIMIT {lastn}
+            """
+            
+    # Else if no skill provided but user provided, show user's most recent entry for each skill
+    # If best specified, return user's highest level in each skill
+    elif member_id != None:
+        query_str = f"""SELECT t1.*
+                FROM {WeaponDB.WeaponLogTable.TABLE_NAME} t1
+                INNER JOIN (SELECT {WeaponDB.WeaponLogTable.MEMBERID_COL}, {WeaponDB.WeaponLogTable.WEAPONID_COL}, MAX({WeaponDB.WeaponLogTable.LEVEL_COL}) max_lvl
+                    FROM {WeaponDB.WeaponLogTable.TABLE_NAME}
+                    GROUP BY {WeaponDB.WeaponLogTable.MEMBERID_COL}, {WeaponDB.WeaponLogTable.WEAPONID_COL}
+                    HAVING {WeaponDB.WeaponLogTable.MEMBERID_COL} = {member_id}) t2
+                ON t1.{WeaponDB.WeaponLogTable.MEMBERID_COL} = t2.{WeaponDB.WeaponLogTable.MEMBERID_COL} 
+                AND t1.{WeaponDB.WeaponLogTable.LEVEL_COL} = t2.max_lvl
+                AND t1.{WeaponDB.WeaponLogTable.WEAPONID_COL} = t2.{WeaponDB.WeaponLogTable.WEAPONID_COL}
+                ORDER BY {WeaponDB.WeaponLogTable.LEVEL_COL} DESC
+                """
+
+    results = brisket_db.query(query_str)
+    table_str = bu.formatTable(bu.listDictToDictList(list(results)))
+    await ctx.send(table_str)
 #################################################################
 
 
