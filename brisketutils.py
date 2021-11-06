@@ -37,6 +37,9 @@ def listDictToDictList(listdict:List[dict]):
     :return: dictlist
     :returntype: dict
     """
+    if listdict == []:
+        return []
+
     return {k : [d[k] for d in listdict] for k in listdict[0].keys()}
 
 def dictListToListDict(dictlist:dict):
