@@ -321,7 +321,7 @@ async def _skill_add(ctx:SlashContext,skill:int,lvl:int,date:str=None):
             return
 
     member_id = ctx.author_id
-    SkillDB.SkillLogTable.insertSkillLog(brisket_db, member_id, skill, date)
+    SkillDB.SkillLogTable.insertSkillLog(brisket_db, member_id=member_id,lvl=lvl,skill_id=skill, date=date)
 
 @slash.subcommand(base="skilllvls",
     name="edit",
@@ -351,7 +351,7 @@ async def _skill_add(ctx:SlashContext,skill:int,lvl:int,date:str=None):
         )
     ]
 )
-async def _skill_edit(ctx:SlashContext, log_id:int, skill:str=None,lvl:int=None,date:str=None):
+async def _skill_edit(ctx:SlashContext, log_id:int, skill:int=None,lvl:int=None,date:str=None):
     # Check if record exists
     try:
         skilllog = brisket_db[SkillDB.SkillLogTable.TABLE_NAME].get(log_id)
@@ -376,7 +376,7 @@ async def _skill_edit(ctx:SlashContext, log_id:int, skill:str=None,lvl:int=None,
         await ctx.send(f"You do not have permission to modify this record by {record_name}.")
         return
     else:
-        SkillDB.SkillLogTable.updateSkillLog(brisket_db, log_id, skill_id, lvl, date)
+        SkillDB.SkillLogTable.updateSkillLog(brisket_db, log_id, skill, lvl, date)
 
 @slash.subcommand(base="skilllvls",
     name="delete",
@@ -436,19 +436,15 @@ async def _skill_delete(ctx:SlashContext, log_id:int):
         )
     ]
 )
-async def _skill_show(ctx:SlashContext, user:Member=None, skill:str=None, lastn:int=5, best:bool=False):
+async def _skill_show(ctx:SlashContext, user:Member=None, skill:int=None, lastn:int=5, best:bool=False):
     member_id = None
-    skill_id = None
 
     # Get specified user and skill IDs
     if user != None:
         member_id = user.id
-    if skill != None:
-        row = next(brisket_db[SkillDB.SkillTable.TABLE_NAME].rows_where(f"{SkillDB.SkillTable.NAME_COL} = {skill}"))
-        skill_id = row[SkillDB.SkillTable.SKILLID_COL]
 
     # If no parameters passed, show last N entries
-    if member_id == None and skill_id == None:
+    if member_id == None and skill == None:
         query_str = f"""SELECT * 
             FROM {SkillDB.SkillLogTable.TABLE_NAME}
             ORDER BY {SkillDB.SkillLogTable.DATE_COL} DESC
@@ -458,7 +454,7 @@ async def _skill_show(ctx:SlashContext, user:Member=None, skill:str=None, lastn:
     elif member_id != None and skill != None:
         query_str = f"""SELECT *
         FROM {SkillDB.SkillLogTable.TABLE_NAME}
-        WHERE {SkillDB.SkillLogTable.SKILLID_COL} = {skill_id} 
+        WHERE {SkillDB.SkillLogTable.SKILLID_COL} = {skill} 
             AND {SkillDB.SkillLogTable.MEMBERID_COL} = {member_id}
         ORDER BY {SkillDB.SkillLogTable.DATE_COL} DESC
         LIMIT {lastn}
@@ -468,14 +464,14 @@ async def _skill_show(ctx:SlashContext, user:Member=None, skill:str=None, lastn:
 
     # Else if no user provided but skill provided, show last N entries for specified skill.
     # If best specified, return lastn players with highest level in that skill
-    elif skill_id != None: 
+    elif skill != None: 
         if best:
             query_str = f"""SELECT t1.*
                 FROM {SkillDB.SkillLogTable.TABLE_NAME} t1
                 INNER JOIN (SELECT {SkillDB.SkillLogTable.MEMBERID_COL}, {SkillDB.SkillLogTable.SKILLID_COL}, MAX({SkillDB.SkillLogTable.LEVEL_COL}) max_lvl
                     FROM {SkillDB.SkillLogTable.TABLE_NAME}
                     GROUP BY {SkillDB.SkillLogTable.MEMBERID_COL}, {SkillDB.SkillLogTable.SKILLID_COL}
-                    HAVING {SkillDB.SkillLogTable.SKILLID_COL} = {skill_id}) t2
+                    HAVING {SkillDB.SkillLogTable.SKILLID_COL} = {skill}) t2
                 ON t1.{SkillDB.SkillLogTable.MEMBERID_COL} = t2.{SkillDB.SkillLogTable.MEMBERID_COL} 
                 AND t1.{SkillDB.SkillLogTable.LEVEL_COL} = t2.max_lvl
                 AND t1.{SkillDB.SkillLogTable.SKILLID_COL} = t2.{SkillDB.SkillLogTable.SKILLID_COL}
@@ -485,7 +481,7 @@ async def _skill_show(ctx:SlashContext, user:Member=None, skill:str=None, lastn:
         else:
             query_str = f"""SELECT *
             FROM {SkillDB.SkillLogTable.TABLE_NAME}
-            WHERE {SkillDB.SkillLogTable.SKILLID_COL} = {skill_id}
+            WHERE {SkillDB.SkillLogTable.SKILLID_COL} = {skill}
             ORDER BY {SkillDB.SkillLogTable.DATE_COL} ASC
             LIMIT {lastn}
             """
